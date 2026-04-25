@@ -95,8 +95,9 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       setError(parsed.error.issues[0].message);
       return;
     }
-    const result = loginWithProfile({ phone, ...parsed.data });
-    if (!result.ok) {
+    const { username: u, cid: c, residenceAddress: r } = parsed.data;
+    const result = loginWithProfile({ phone, username: u, cid: c, residenceAddress: r });
+    if (result.ok === false) {
       setError(result.error);
       return;
     }
