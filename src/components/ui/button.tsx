@@ -9,17 +9,21 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 rounded-xl",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl",
+        outline: "border border-input bg-background hover:bg-muted hover:text-foreground rounded-xl",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-xl",
+        ghost: "hover:bg-muted hover:text-foreground rounded-xl",
         link: "text-primary underline-offset-4 hover:underline",
+        hero: "bg-gradient-primary text-primary-foreground shadow-soft hover:shadow-glow hover:-translate-y-0.5 transition-smooth rounded-xl",
+        mint: "bg-secondary text-secondary-foreground hover:brightness-105 shadow-soft rounded-xl",
+        soft: "bg-primary-soft text-primary hover:bg-primary/15 rounded-xl",
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
+        sm: "h-9 px-3 rounded-lg",
+        lg: "h-12 px-7 text-base rounded-xl",
+        xl: "h-14 px-8 text-base rounded-2xl",
         icon: "h-10 w-10",
       },
     },
