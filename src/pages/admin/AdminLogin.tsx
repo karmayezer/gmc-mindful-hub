@@ -23,11 +23,11 @@ const AdminLogin = () => {
     e.preventDefault();
     setError(null);
     const res = adminLogin(username, password);
-    if (!res.ok) {
+    if (res.ok) {
+      navigate("/gmc-admin-control", { replace: true });
+    } else {
       setError(res.error);
-      return;
     }
-    navigate("/gmc-admin-control", { replace: true });
   };
 
   return (
