@@ -57,6 +57,10 @@ interface AppState {
   jobs: Job[];
   /** All registered profiles — used to enforce duplicate-CID prevention. */
   registry: UserProfile[];
+  /** Configurable platform commission per category (10–15%). */
+  categoryCommission: Record<CategoryId, number>;
+  /** Active admin/analyst session. */
+  admin: { username: string; role: AdminRole } | null;
 }
 
 interface AppContextValue extends AppState {
@@ -69,35 +73,66 @@ interface AppContextValue extends AppState {
   completeJob: (jobId: string) => void;
   rateJob: (jobId: string, rating: number, comment?: string) => void;
   sendMessage: (jobId: string, from: "customer" | "pro", text: string) => void;
+  // Admin-only operations
+  adminLogin: (username: string, password: string) => { ok: true; role: AdminRole } | { ok: false; error: string };
+  adminLogout: () => void;
+  setCategoryCommission: (categoryId: CategoryId, pct: number) => void;
+  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => void;
+  updatePro: (proId: string, patch: Partial<Pro>) => void;
+  setProStatus: (proId: string, status: "active" | "suspended") => void;
+  removePro: (proId: string) => void;
+  setUserStatus: (userId: string, status: "active" | "suspended") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v1";
+const STORAGE_KEY = "gmc-service-hub:v2";
 
 interface PersistedState {
   user: UserProfile | null;
   pros: Pro[];
   jobs: Job[];
   registry: UserProfile[];
+  categoryCommission: Record<CategoryId, number>;
+  admin: { username: string; role: AdminRole } | null;
 }
 
+const defaultCommission = (): Record<CategoryId, number> =>
+  CATEGORIES.reduce((acc, c) => {
+    acc[c.id] = c.commissionPct;
+    return acc;
+  }, {} as Record<CategoryId, number>);
+
+const seededPros = (): Pro[] => MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active" }));
+
+const emptyState = (): PersistedState => ({
+  user: null,
+  pros: seededPros(),
+  jobs: [],
+  registry: [],
+  categoryCommission: defaultCommission(),
+  admin: null,
+});
+
 const loadState = (): PersistedState => {
-  if (typeof window === "undefined") {
-    return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
-  }
+  if (typeof window === "undefined") return emptyState();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
+    if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
+    const base = emptyState();
     return {
       user: parsed.user ?? null,
-      pros: parsed.pros && parsed.pros.length > 0 ? parsed.pros : MOCK_PROS,
+      pros: parsed.pros && parsed.pros.length > 0
+        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active" }))
+        : base.pros,
       jobs: parsed.jobs ?? [],
       registry: parsed.registry ?? [],
+      categoryCommission: { ...base.categoryCommission, ...(parsed.categoryCommission ?? {}) },
+      admin: parsed.admin ?? null,
     };
   } catch {
-    return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
+    return emptyState();
   }
 };
 
