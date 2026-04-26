@@ -28,7 +28,7 @@ const About = () => {
             To provide a mindful, secure, and professional connection between GMC residents and certified service providers. Every connection should feel calm, dignified, and fair to both sides.
           </p>
           <p className="mt-3 text-muted-foreground">
-            We do this through verified identities, transparent Nu. pricing, real-time reputation, and a workflow that protects both customers and pros from disintermediation and disputes.
+            We do this through verified identities, transparent pricing, real-time reputation, and a workflow that protects both customers and pros from disintermediation and disputes.
           </p>
         </div>
         <ul className="grid gap-4">
@@ -36,7 +36,7 @@ const About = () => {
             { icon: ShieldCheck, title: "Verified identities", body: "Phone-OTP plus Bhutan CID-based KYC for every resident and every pro." },
             { icon: HandCoins, title: "Transparent commission", body: "10–15% platform fee shown to the pro before they submit any quote." },
             { icon: Sparkles, title: "Real-time reputation", body: "Pro ratings update instantly. Below 3.0 average flags an account for review." },
-            { icon: Mountain, title: "Rooted in Bhutan", body: "All prices in Nu. The aesthetic, the conduct, the values — distinctly local." },
+            { icon: Mountain, title: "Rooted in Bhutan", body: "The aesthetic, the conduct, the values — distinctly local." },
           ].map((item, i) => {
             const Icon = item.icon;
             return (
