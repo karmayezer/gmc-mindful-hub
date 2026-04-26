@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -6,12 +7,23 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useApp } from "@/store/app-store";
-import { ArrowRight, ShieldCheck, Phone, KeyRound, UserCircle2 } from "lucide-react";
+import {
+  ArrowRight,
+  ShieldCheck,
+  Phone,
+  KeyRound,
+  UserCircle2,
+  Mail,
+  Lock,
+  Building2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -22,6 +34,16 @@ interface LoginDialogProps {
 }
 
 type Step = "phone" | "otp" | "profile";
+type Mode = "resident" | "staff";
+
+/** Allowed company email domain for GMC staff sign-in. */
+const COMPANY_EMAIL_DOMAIN = "gmcservicehub.bt";
+
+/** Map of company email → admin store username (which holds the real role + password). */
+const STAFF_EMAIL_TO_USERNAME: Record<string, string> = {
+  [`admin@${COMPANY_EMAIL_DOMAIN}`]: "admin",
+  [`analyst@${COMPANY_EMAIL_DOMAIN}`]: "analyst",
+};
 
 const phoneSchema = z
   .string()
@@ -34,8 +56,24 @@ const profileSchema = z.object({
   residenceAddress: z.string().trim().min(4, "Please enter your GMC address.").max(160, "Too long."),
 });
 
+const staffEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .email("Enter a valid email address.")
+  .max(160, "Too long.")
+  .refine(
+    (email) => email.endsWith(`@${COMPANY_EMAIL_DOMAIN}`),
+    `Only @${COMPANY_EMAIL_DOMAIN} company emails are allowed.`,
+  );
+
 export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps) => {
-  const { loginWithProfile, registry } = useApp();
+  const { loginWithProfile, registry, adminLogin } = useApp();
+  const navigate = useNavigate();
+
+  const [mode, setMode] = useState<Mode>("resident");
+
+  // Resident flow state
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("+975");
   const [otp, setOtp] = useState("");
@@ -44,10 +82,17 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
   const [address, setAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // Staff flow state
+  const [staffEmail, setStaffEmail] = useState("");
+  const [staffPassword, setStaffPassword] = useState("");
+  const [staffError, setStaffError] = useState<string | null>(null);
+
   const reset = () => {
     setStep("phone");
     setOtp("");
     setError(null);
+    setStaffError(null);
+    setStaffPassword("");
   };
 
   const handleClose = (next: boolean) => {
@@ -63,11 +108,8 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       setError(result.error.issues[0].message);
       return;
     }
-    // Direct-login mode: skip the OTP step automatically (per spec: "you can directly login without registration").
-    // We still show a quick OTP screen with auto-fill so the flow feels real.
     setStep("otp");
     setOtp("123456");
-    // If a profile already exists for this phone, fast-path log in.
     const existing = registry.find((u) => u.phone === phone);
     if (existing) {
       const r = loginWithProfile({
@@ -82,7 +124,6 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
         onSuccess?.();
       }
     } else {
-      // Auto-advance to profile in 400ms for a smooth feel.
       setTimeout(() => setStep("profile"), 400);
     }
   };
@@ -106,6 +147,33 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
     onSuccess?.();
   };
 
+  const handleStaffSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setStaffError(null);
+    const parsed = staffEmailSchema.safeParse(staffEmail);
+    if (!parsed.success) {
+      setStaffError(parsed.error.issues[0].message);
+      return;
+    }
+    if (staffPassword.length < 6) {
+      setStaffError("Enter your staff password.");
+      return;
+    }
+    const username = STAFF_EMAIL_TO_USERNAME[parsed.data];
+    if (!username) {
+      setStaffError("This company email is not registered as staff.");
+      return;
+    }
+    const res = adminLogin(username, staffPassword);
+    if (res.ok === false) {
+      setStaffError(res.error);
+      return;
+    }
+    toast.success(`Welcome, ${username}. Entering Control Tower.`);
+    handleClose(false);
+    navigate("/gmc-admin-control");
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden border-border/60">
@@ -115,119 +183,202 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
           </div>
           <DialogHeader className="mt-2 space-y-1 text-left">
             <DialogTitle className="font-display text-2xl text-primary-foreground">
-              {step === "phone" && "Sign in to GMC Service Hub"}
-              {step === "otp" && "Verify your phone"}
-              {step === "profile" && "Complete your KYC profile"}
+              {mode === "staff"
+                ? "GMC Staff sign in"
+                : step === "phone"
+                ? "Sign in to GMC Service Hub"
+                : step === "otp"
+                ? "Verify your phone"
+                : "Complete your KYC profile"}
             </DialogTitle>
             <DialogDescription className="text-primary-foreground/85">
-              {step === "phone" && "Phone-first sign in. Direct login enabled — no OTP required for now."}
-              {step === "otp" && "We auto-filled your code in this preview. Tap continue."}
-              {step === "profile" && "A few details to verify you as a GMC resident."}
+              {mode === "staff"
+                ? `Restricted to verified @${COMPANY_EMAIL_DOMAIN} accounts.`
+                : step === "phone"
+                ? "Phone-first sign in. Direct login enabled — no OTP required for now."
+                : step === "otp"
+                ? "We auto-filled your code in this preview. Tap continue."
+                : "A few details to verify you as a GMC resident."}
             </DialogDescription>
           </DialogHeader>
         </div>
 
         <div className="p-6">
-          {step === "phone" && (
-            <form onSubmit={handlePhoneSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="phone" className="text-sm">Phone number</Label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    inputMode="tel"
-                    autoFocus
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="pl-10 h-12 rounded-xl"
-                    placeholder="+975 17 555 0123"
-                  />
-                </div>
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" variant="hero" size="lg" className="w-full">
-                Continue <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-              <p className="text-xs text-center text-muted-foreground">
-                By continuing you agree to GMC Service Hub's terms and mindful-conduct guidelines.
-              </p>
-            </form>
-          )}
+          <Tabs
+            value={mode}
+            onValueChange={(v) => {
+              setMode(v as Mode);
+              setError(null);
+              setStaffError(null);
+            }}
+            className="w-full"
+          >
+            <TabsList className="grid w-full grid-cols-2 mb-5">
+              <TabsTrigger value="resident" className="gap-1.5">
+                <UserCircle2 className="h-4 w-4" /> Resident
+              </TabsTrigger>
+              <TabsTrigger value="staff" className="gap-1.5">
+                <Building2 className="h-4 w-4" /> Staff / Admin
+              </TabsTrigger>
+            </TabsList>
 
-          {step === "otp" && (
-            <div className="space-y-4 text-center">
-              <KeyRound className="mx-auto h-8 w-8 text-primary" />
-              <p className="text-sm text-muted-foreground">
-                Code sent to <span className="font-medium text-foreground">{phone}</span>
-              </p>
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-                  <InputOTPGroup>
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <InputOTPSlot key={i} index={i} />
-                    ))}
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-              <Button
-                variant="hero"
-                size="lg"
-                className="w-full"
-                onClick={() => setStep("profile")}
-                disabled={otp.length !== 6}
-              >
-                Verify & continue
-              </Button>
-            </div>
-          )}
+            {/* ---------------- Resident tab ---------------- */}
+            <TabsContent value="resident" className="mt-0">
+              {step === "phone" && (
+                <form onSubmit={handlePhoneSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="text-sm">Phone number</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="phone"
+                        inputMode="tel"
+                        autoFocus
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="pl-10 h-12 rounded-xl"
+                        placeholder="+975 17 555 0123"
+                      />
+                    </div>
+                  </div>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  <Button type="submit" variant="hero" size="lg" className="w-full">
+                    Continue <ArrowRight className="ml-1 h-4 w-4" />
+                  </Button>
+                  <p className="text-xs text-center text-muted-foreground">
+                    By continuing you agree to GMC Service Hub's terms and mindful-conduct guidelines.
+                  </p>
+                </form>
+              )}
 
-          {step === "profile" && (
-            <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <div className="relative">
-                  <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="pl-10 h-11 rounded-xl"
-                    placeholder="e.g. Tashi D."
-                    autoFocus
-                  />
+              {step === "otp" && (
+                <div className="space-y-4 text-center">
+                  <KeyRound className="mx-auto h-8 w-8 text-primary" />
+                  <p className="text-sm text-muted-foreground">
+                    Code sent to <span className="font-medium text-foreground">{phone}</span>
+                  </p>
+                  <div className="flex justify-center">
+                    <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                      <InputOTPGroup>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <InputOTPSlot key={i} index={i} />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <Button
+                    variant="hero"
+                    size="lg"
+                    className="w-full"
+                    onClick={() => setStep("profile")}
+                    disabled={otp.length !== 6}
+                  >
+                    Verify & continue
+                  </Button>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cid">CID number (11 digits)</Label>
-                <Input
-                  id="cid"
-                  inputMode="numeric"
-                  value={cid}
-                  onChange={(e) => setCid(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                  className="h-11 rounded-xl tracking-widest"
-                  placeholder="•••••••••••"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Encrypted and stored securely. Used only for one-time verification.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">GMC residence address</Label>
-                <Input
-                  id="address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="h-11 rounded-xl"
-                  placeholder="House / Apt, Sector, GMC"
-                />
-              </div>
-              {error && <p className="text-sm text-destructive">{error}</p>}
-              <Button type="submit" variant="hero" size="lg" className="w-full">
-                Verify & enter <ArrowRight className="ml-1 h-4 w-4" />
-              </Button>
-            </form>
-          )}
+              )}
+
+              {step === "profile" && (
+                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <div className="relative">
+                      <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        className="pl-10 h-11 rounded-xl"
+                        placeholder="e.g. Tashi D."
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cid">CID number (11 digits)</Label>
+                    <Input
+                      id="cid"
+                      inputMode="numeric"
+                      value={cid}
+                      onChange={(e) => setCid(e.target.value.replace(/\D/g, "").slice(0, 11))}
+                      className="h-11 rounded-xl tracking-widest"
+                      placeholder="•••••••••••"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Encrypted and stored securely. Used only for one-time verification.
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address">GMC residence address</Label>
+                    <Input
+                      id="address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="House / Apt, Sector, GMC"
+                    />
+                  </div>
+                  {error && <p className="text-sm text-destructive">{error}</p>}
+                  <Button type="submit" variant="hero" size="lg" className="w-full">
+                    Verify & enter <ArrowRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </form>
+              )}
+            </TabsContent>
+
+            {/* ---------------- Staff / Admin tab ---------------- */}
+            <TabsContent value="staff" className="mt-0">
+              <form onSubmit={handleStaffSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="staff-email">Company email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="staff-email"
+                      type="email"
+                      autoComplete="email"
+                      value={staffEmail}
+                      onChange={(e) => setStaffEmail(e.target.value)}
+                      className="pl-10 h-11 rounded-xl"
+                      placeholder={`name@${COMPANY_EMAIL_DOMAIN}`}
+                      autoFocus
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Only <span className="font-medium text-foreground">@{COMPANY_EMAIL_DOMAIN}</span> addresses can sign in here.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="staff-password">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="staff-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
+                      className="pl-10 h-11 rounded-xl"
+                      placeholder="Your staff password"
+                    />
+                  </div>
+                </div>
+                {staffError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{staffError}</AlertDescription>
+                  </Alert>
+                )}
+                <Button type="submit" variant="hero" size="lg" className="w-full">
+                  Enter Control Tower <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+                <div className="rounded-lg bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
+                  <div className="font-medium text-foreground">Demo staff credentials</div>
+                  <div>admin@{COMPANY_EMAIL_DOMAIN} / gmc-admin-2025</div>
+                  <div>analyst@{COMPANY_EMAIL_DOMAIN} / gmc-analyst-2025</div>
+                </div>
+              </form>
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>
