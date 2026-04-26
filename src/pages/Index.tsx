@@ -28,7 +28,7 @@ const Index = () => {
               Mindful service, <span className="text-primary">trusted hands.</span>
             </h1>
             <p className="mt-6 text-lg text-muted-foreground max-w-xl text-balance">
-              GMC Service Hub connects residents of Gelephu Mindfulness City with certified plumbers, electricians, drivers, mechanics, cleaners, and masons — with transparent Nu. pricing and verified identities.
+              GMC Service Hub connects residents of Gelephu Mindfulness City with certified plumbers, electricians, drivers, mechanics, cleaners, and masons — with transparent pricing and verified identities.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild variant="hero" size="xl">
@@ -84,7 +84,7 @@ const Index = () => {
             {[
               { icon: ShieldCheck, title: "Verify yourself", body: "Phone OTP and CID-based KYC keep the marketplace safe and authentic for every GMC resident." },
               { icon: Sparkles, title: "Pick a verified pro", body: "Browse certified pros sorted by their Professional Value score — earned through real customer ratings." },
-              { icon: HandCoins, title: "Quote, accept, complete", body: "Pros provide a transparent Nu. quote with platform fee shown. Pay only after accepting." },
+              { icon: HandCoins, title: "Quote, accept, complete", body: "Pros provide a transparent quote with platform fee shown. Pay only after accepting." },
             ].map((s, i) => {
               const Icon = s.icon;
               return (
@@ -131,7 +131,7 @@ const Index = () => {
             </Button>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {["Identity verified", "Transparent Nu. pricing", "Real-time ratings", "Mindful conduct"].map((t) => (
+            {["Identity verified", "Transparent pricing", "Real-time ratings", "Mindful conduct"].map((t) => (
               <div key={t} className="rounded-2xl bg-primary-foreground/10 backdrop-blur p-4 border border-primary-foreground/20">
                 <BadgeCheck className="h-5 w-5 mb-2" />
                 <p className="text-sm font-medium">{t}</p>
