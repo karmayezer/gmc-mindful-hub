@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MOCK_PROS, type Pro, type CategoryId } from "@/data/marketplace";
+import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId } from "@/data/marketplace";
 
 export interface UserProfile {
   id: string;
@@ -8,7 +8,12 @@ export interface UserProfile {
   cid: string;            // 11-digit CID (stored masked in UI; in real app would be encrypted server-side)
   residenceAddress: string;
   createdAt: number;
+  /** Last login timestamp — used for DAU analytics. */
+  lastLoginAt?: number;
+  status?: "active" | "suspended";
 }
+
+export type AdminRole = "admin" | "analyst";
 
 export type JobStatus =
   | "pending"      // customer initiated, awaiting pro quote
