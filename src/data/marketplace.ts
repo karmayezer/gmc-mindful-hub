@@ -52,6 +52,10 @@ export interface Pro {
   preciseAddress: string;
   generalArea: string;
   avatarSeed: string;
+  /** Admin-controlled listing status. Defaults to active. */
+  status?: "active" | "suspended";
+  /** Optional certification reference shown in admin views. */
+  certificationId?: string;
 }
 
 export const MOCK_PROS: Pro[] = [
