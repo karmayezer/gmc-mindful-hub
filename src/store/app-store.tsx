@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MOCK_PROS, type Pro, type CategoryId } from "@/data/marketplace";
+import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId } from "@/data/marketplace";
 
 export interface UserProfile {
   id: string;
@@ -8,7 +8,12 @@ export interface UserProfile {
   cid: string;            // 11-digit CID (stored masked in UI; in real app would be encrypted server-side)
   residenceAddress: string;
   createdAt: number;
+  /** Last login timestamp — used for DAU analytics. */
+  lastLoginAt?: number;
+  status?: "active" | "suspended";
 }
+
+export type AdminRole = "admin" | "analyst";
 
 export type JobStatus =
   | "pending"      // customer initiated, awaiting pro quote
@@ -52,6 +57,10 @@ interface AppState {
   jobs: Job[];
   /** All registered profiles — used to enforce duplicate-CID prevention. */
   registry: UserProfile[];
+  /** Configurable platform commission per category (10–15%). */
+  categoryCommission: Record<CategoryId, number>;
+  /** Active admin/analyst session. */
+  admin: { username: string; role: AdminRole } | null;
 }
 
 interface AppContextValue extends AppState {
@@ -64,35 +73,66 @@ interface AppContextValue extends AppState {
   completeJob: (jobId: string) => void;
   rateJob: (jobId: string, rating: number, comment?: string) => void;
   sendMessage: (jobId: string, from: "customer" | "pro", text: string) => void;
+  // Admin-only operations
+  adminLogin: (username: string, password: string) => { ok: true; role: AdminRole } | { ok: false; error: string };
+  adminLogout: () => void;
+  setCategoryCommission: (categoryId: CategoryId, pct: number) => void;
+  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => void;
+  updatePro: (proId: string, patch: Partial<Pro>) => void;
+  setProStatus: (proId: string, status: "active" | "suspended") => void;
+  removePro: (proId: string) => void;
+  setUserStatus: (userId: string, status: "active" | "suspended") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v1";
+const STORAGE_KEY = "gmc-service-hub:v2";
 
 interface PersistedState {
   user: UserProfile | null;
   pros: Pro[];
   jobs: Job[];
   registry: UserProfile[];
+  categoryCommission: Record<CategoryId, number>;
+  admin: { username: string; role: AdminRole } | null;
 }
 
+const defaultCommission = (): Record<CategoryId, number> =>
+  CATEGORIES.reduce((acc, c) => {
+    acc[c.id] = c.commissionPct;
+    return acc;
+  }, {} as Record<CategoryId, number>);
+
+const seededPros = (): Pro[] => MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active" }));
+
+const emptyState = (): PersistedState => ({
+  user: null,
+  pros: seededPros(),
+  jobs: [],
+  registry: [],
+  categoryCommission: defaultCommission(),
+  admin: null,
+});
+
 const loadState = (): PersistedState => {
-  if (typeof window === "undefined") {
-    return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
-  }
+  if (typeof window === "undefined") return emptyState();
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
+    if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
+    const base = emptyState();
     return {
       user: parsed.user ?? null,
-      pros: parsed.pros && parsed.pros.length > 0 ? parsed.pros : MOCK_PROS,
+      pros: parsed.pros && parsed.pros.length > 0
+        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active" }))
+        : base.pros,
       jobs: parsed.jobs ?? [],
       registry: parsed.registry ?? [],
+      categoryCommission: { ...base.categoryCommission, ...(parsed.categoryCommission ?? {}) },
+      admin: parsed.admin ?? null,
     };
   } catch {
-    return { user: null, pros: MOCK_PROS, jobs: [], registry: [] };
+    return emptyState();
   }
 };
 
@@ -120,9 +160,10 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
       // Reuse existing profile by phone if present.
       const byPhone = prev.registry.find((u) => u.phone === data.phone);
+      const now = Date.now();
       const profile: UserProfile = byPhone
-        ? { ...byPhone, ...data }
-        : { id: newId(), createdAt: Date.now(), ...data };
+        ? { ...byPhone, ...data, lastLoginAt: now, status: byPhone.status ?? "active" }
+        : { id: newId(), createdAt: now, lastLoginAt: now, status: "active", ...data };
       const registry = byPhone
         ? prev.registry.map((u) => (u.id === byPhone.id ? profile : u))
         : [...prev.registry, profile];
@@ -141,6 +182,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       if (!prev.user) return prev;
       const pro = prev.pros.find((p) => p.id === proId);
       if (!pro) return prev;
+      const commissionPct = prev.categoryCommission[pro.category] ?? 12;
       const job: Job = {
         id: newId(),
         proId,
@@ -152,7 +194,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         baseRateNu: pro.baseRateNu,
         complexityFeeNu: 0,
         totalChargeNu: pro.baseRateNu,
-        commissionPct: 12,
+        commissionPct,
         platformFeeNu: 0,
         payoutNu: pro.baseRateNu,
         messages: [
@@ -276,6 +318,75 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }));
   }, []);
 
+  // ---------------- Admin operations ----------------
+  const adminLogin: AppContextValue["adminLogin"] = useCallback((username, password) => {
+    // Mock credentials — in production these would be server-validated against an admin table.
+    const ADMIN_USERS: Record<string, { password: string; role: AdminRole }> = {
+      admin: { password: "gmc-admin-2025", role: "admin" },
+      analyst: { password: "gmc-analyst-2025", role: "analyst" },
+    };
+    const entry = ADMIN_USERS[username.trim().toLowerCase()];
+    if (!entry || entry.password !== password) {
+      return { ok: false, error: "Invalid admin credentials." };
+    }
+    setState((prev) => ({ ...prev, admin: { username: username.trim().toLowerCase(), role: entry.role } }));
+    return { ok: true, role: entry.role };
+  }, []);
+
+  const adminLogout = useCallback(() => {
+    setState((prev) => ({ ...prev, admin: null }));
+  }, []);
+
+  const setCategoryCommission = useCallback((categoryId: CategoryId, pct: number) => {
+    const clamped = Math.max(10, Math.min(15, pct));
+    setState((prev) => ({
+      ...prev,
+      categoryCommission: { ...prev.categoryCommission, [categoryId]: clamped },
+    }));
+  }, []);
+
+  const addPro: AppContextValue["addPro"] = useCallback((input) => {
+    setState((prev) => ({
+      ...prev,
+      pros: [
+        {
+          id: newId(),
+          avgRating: input.avgRating ?? 4.5,
+          totalJobs: 0,
+          status: input.status ?? "active",
+          ...input,
+        },
+        ...prev.pros,
+      ],
+    }));
+  }, []);
+
+  const updatePro = useCallback((proId: string, patch: Partial<Pro>) => {
+    setState((prev) => ({
+      ...prev,
+      pros: prev.pros.map((p) => (p.id === proId ? { ...p, ...patch } : p)),
+    }));
+  }, []);
+
+  const setProStatus = useCallback((proId: string, status: "active" | "suspended") => {
+    setState((prev) => ({
+      ...prev,
+      pros: prev.pros.map((p) => (p.id === proId ? { ...p, status } : p)),
+    }));
+  }, []);
+
+  const removePro = useCallback((proId: string) => {
+    setState((prev) => ({ ...prev, pros: prev.pros.filter((p) => p.id !== proId) }));
+  }, []);
+
+  const setUserStatus = useCallback((userId: string, status: "active" | "suspended") => {
+    setState((prev) => ({
+      ...prev,
+      registry: prev.registry.map((u) => (u.id === userId ? { ...u, status } : u)),
+      user: prev.user?.id === userId ? { ...prev.user, status } : prev.user,
+    }));
+  }, []);
+
   const value = useMemo<AppContextValue>(
     () => ({
       ...state,
@@ -288,8 +399,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       completeJob,
       rateJob,
       sendMessage,
+      adminLogin,
+      adminLogout,
+      setCategoryCommission,
+      addPro,
+      updatePro,
+      setProStatus,
+      removePro,
+      setUserStatus,
     }),
-    [state, loginWithProfile, logout, createJob, submitQuote, acceptQuote, cancelJob, completeJob, rateJob, sendMessage],
+    [
+      state, loginWithProfile, logout, createJob, submitQuote, acceptQuote,
+      cancelJob, completeJob, rateJob, sendMessage,
+      adminLogin, adminLogout, setCategoryCommission,
+      addPro, updatePro, setProStatus, removePro, setUserStatus,
+    ],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

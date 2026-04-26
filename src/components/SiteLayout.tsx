@@ -161,7 +161,10 @@ export const SiteLayout = ({ children }: { children: ReactNode }) => {
           </div>
         </div>
         <div className="border-t border-border/60 py-4 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} GMC Service Hub · Prices in Bhutanese Ngultrum (Nu.)
+          © {new Date().getFullYear()} GMC Service Hub · Prices in Bhutanese Ngultrum (Nu.) ·{" "}
+          <Link to="/gmc-admin-control/login" className="hover:text-primary underline-offset-4 hover:underline">
+            Staff portal
+          </Link>
         </div>
       </footer>
 
