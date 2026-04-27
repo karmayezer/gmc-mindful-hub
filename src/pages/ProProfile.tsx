@@ -23,6 +23,16 @@ const ProProfile = () => {
       </section>
     );
   }
+  // Hide unapproved pros from the public — direct-URL access is also blocked.
+  if (pro.isApproved === false) {
+    return (
+      <section className="container py-20 text-center">
+        <h1 className="font-display text-3xl">Profile pending verification</h1>
+        <p className="text-muted-foreground mt-2">This professional is awaiting GMC admin approval and isn't publicly listed yet.</p>
+        <Button asChild variant="hero" className="mt-6"><Link to="/services">Back to services</Link></Button>
+      </section>
+    );
+  }
   const category = getCategory(pro.category);
   const flagged = pro.avgRating < 3.0;
 
