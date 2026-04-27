@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navLinks = [
+const baseNavLinks = [
   { to: "/", label: "Home" },
   { to: "/services", label: "Services" },
   { to: "/jobs", label: "My Jobs" },
@@ -26,6 +26,16 @@ export const SiteLayout = ({ children }: { children: ReactNode }) => {
   const navigate = useNavigate();
   const [loginOpen, setLoginOpen] = useState(false);
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+
+  // Pros see a dedicated dashboard link instead of "My Jobs".
+  const navLinks = user?.role === "PRO"
+    ? [
+        { to: "/", label: "Home" },
+        { to: "/services", label: "Services" },
+        { to: "/pro-dashboard", label: "Pro Dashboard" },
+        { to: "/about", label: "About GMC" },
+      ]
+    : baseNavLinks;
 
   const requireAuth = (path: string) => {
     if (user) navigate(path);

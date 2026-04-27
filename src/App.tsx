@@ -11,6 +11,7 @@ import Services from "./pages/Services.tsx";
 import CategoryPage from "./pages/CategoryPage.tsx";
 import ProProfile from "./pages/ProProfile.tsx";
 import MyJobs from "./pages/MyJobs.tsx";
+import ProDashboard from "./pages/ProDashboard.tsx";
 import About from "./pages/About.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLogin from "./pages/admin/AdminLogin.tsx";
@@ -84,6 +85,7 @@ const App = () => (
                     <Route path="/services/:categoryId" element={<CategoryPage />} />
                     <Route path="/pro/:proId" element={<ProProfile />} />
                     <Route path="/jobs" element={<MyJobs />} />
+                    <Route path="/pro-dashboard" element={<ProDashboard />} />
                     <Route path="/about" element={<About />} />
                     {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                     <Route path="*" element={<NotFound />} />
