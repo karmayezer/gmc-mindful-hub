@@ -14,7 +14,8 @@ const CategoryPage = () => {
 
   const list = useMemo(() => {
     if (!category) return [];
-    const base = pros.filter((p) => p.category === category.id);
+    // Hide pros that haven't been approved by admin from the public directory.
+    const base = pros.filter((p) => p.category === category.id && p.isApproved !== false);
     const filtered = filter === "certified" ? base.filter((p) => p.certified) : base;
     return [...filtered].sort((a, b) => b.avgRating - a.avgRating);
   }, [pros, category, filter]);
