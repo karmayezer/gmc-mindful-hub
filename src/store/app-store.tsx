@@ -417,19 +417,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const addPro: AppContextValue["addPro"] = useCallback((input) => {
-    setState((prev) => ({
-      ...prev,
-      pros: [
-        {
-          id: newId(),
-          avgRating: input.avgRating ?? 4.5,
-          totalJobs: 0,
-          status: input.status ?? "active",
-          ...input,
-        },
-        ...prev.pros,
-      ],
-    }));
+    const created: Pro = {
+      id: newId(),
+      avgRating: input.avgRating ?? 4.5,
+      totalJobs: 0,
+      status: input.status ?? "active",
+      isApproved: input.isApproved ?? true, // pros added via Admin form are trusted by default.
+      ...input,
+    };
+    setState((prev) => ({ ...prev, pros: [created, ...prev.pros] }));
+    return created;
   }, []);
 
   const updatePro = useCallback((proId: string, patch: Partial<Pro>) => {
@@ -443,6 +440,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setState((prev) => ({
       ...prev,
       pros: prev.pros.map((p) => (p.id === proId ? { ...p, status } : p)),
+    }));
+  }, []);
+
+  const setProApproval = useCallback((proId: string, isApproved: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      pros: prev.pros.map((p) => (p.id === proId ? { ...p, isApproved } : p)),
     }));
   }, []);
 
