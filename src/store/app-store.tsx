@@ -101,7 +101,7 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v2";
+const STORAGE_KEY = "gmc-service-hub:v3";
 
 interface PersistedState {
   user: UserProfile | null;
@@ -118,7 +118,9 @@ const defaultCommission = (): Record<CategoryId, number> =>
     return acc;
   }, {} as Record<CategoryId, number>);
 
-const seededPros = (): Pro[] => MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active" }));
+// Seeded MOCK_PROS are the initial directory — auto-approved so the demo isn't empty.
+const seededPros = (): Pro[] =>
+  MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active", isApproved: p.isApproved ?? true }));
 
 const emptyState = (): PersistedState => ({
   user: null,
@@ -129,6 +131,23 @@ const emptyState = (): PersistedState => ({
   admin: null,
 });
 
+/** Migrate any pre-existing profile shape (which only had `cid`) to the new id-doc shape. */
+const migrateProfile = (u: Partial<UserProfile> & { cid?: string }): UserProfile => ({
+  id: u.id ?? newId(),
+  phone: u.phone ?? "",
+  username: u.username ?? "Resident",
+  idDocType: u.idDocType ?? "cid",
+  idDocNumber: u.idDocNumber ?? u.cid ?? "",
+  cid: u.cid,
+  residenceAddress: u.residenceAddress ?? "",
+  role: u.role ?? "CUSTOMER",
+  proCategory: u.proCategory,
+  proId: u.proId,
+  createdAt: u.createdAt ?? Date.now(),
+  lastLoginAt: u.lastLoginAt,
+  status: u.status ?? "active",
+});
+
 const loadState = (): PersistedState => {
   if (typeof window === "undefined") return emptyState();
   try {
@@ -137,12 +156,12 @@ const loadState = (): PersistedState => {
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
     const base = emptyState();
     return {
-      user: parsed.user ?? null,
+      user: parsed.user ? migrateProfile(parsed.user) : null,
       pros: parsed.pros && parsed.pros.length > 0
-        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active" }))
+        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active", isApproved: p.isApproved ?? true }))
         : base.pros,
       jobs: parsed.jobs ?? [],
-      registry: parsed.registry ?? [],
+      registry: (parsed.registry ?? []).map(migrateProfile),
       categoryCommission: { ...base.categoryCommission, ...(parsed.categoryCommission ?? {}) },
       admin: parsed.admin ?? null,
     };
