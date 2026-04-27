@@ -77,7 +77,7 @@ interface AppState {
 }
 
 interface AppContextValue extends AppState {
-  loginWithProfile: (data: Omit<UserProfile, "id" | "createdAt">) => { ok: true } | { ok: false; error: string };
+  loginWithProfile: (data: Omit<UserProfile, "id" | "createdAt">) => { ok: true; user: UserProfile } | { ok: false; error: string };
   logout: () => void;
   createJob: (input: { proId: string; description: string }) => Job | null;
   submitQuote: (jobId: string, complexityFeeNu: number) => void;
@@ -90,9 +90,11 @@ interface AppContextValue extends AppState {
   adminLogin: (username: string, password: string) => { ok: true; role: AdminRole } | { ok: false; error: string };
   adminLogout: () => void;
   setCategoryCommission: (categoryId: CategoryId, pct: number) => void;
-  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => void;
+  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => Pro;
   updatePro: (proId: string, patch: Partial<Pro>) => void;
   setProStatus: (proId: string, status: "active" | "suspended") => void;
+  /** Toggle the public visibility of a pro after admin verification. */
+  setProApproval: (proId: string, isApproved: boolean) => void;
   removePro: (proId: string) => void;
   setUserStatus: (userId: string, status: "active" | "suspended") => void;
 }
