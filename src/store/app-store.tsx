@@ -184,24 +184,61 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [state]);
 
   const loginWithProfile: AppContextValue["loginWithProfile"] = useCallback((data) => {
-    let result: { ok: true } | { ok: false; error: string } = { ok: true };
+    let result: { ok: true; user: UserProfile } | { ok: false; error: string } = {
+      ok: false,
+      error: "Login failed.",
+    };
     setState((prev) => {
-      // Duplicate CID prevention.
-      const existing = prev.registry.find((u) => u.cid === data.cid);
-      if (existing && existing.phone !== data.phone) {
-        result = { ok: false, error: "This CID is already registered with a different phone number." };
+      // Duplicate ID-document prevention (same number used by a different phone).
+      const dup = prev.registry.find(
+        (u) =>
+          u.idDocType === data.idDocType &&
+          u.idDocNumber === data.idDocNumber &&
+          u.phone !== data.phone,
+      );
+      if (dup) {
+        result = { ok: false, error: "This ID document is already registered with a different phone number." };
         return prev;
       }
-      // Reuse existing profile by phone if present.
+      // Reuse existing profile by phone if present (returning user).
       const byPhone = prev.registry.find((u) => u.phone === data.phone);
       const now = Date.now();
+      let nextPros = prev.pros;
+      let proIdForUser = byPhone?.proId;
+
+      // If signing up as a PRO for the first time, create a Pro listing in "pending approval" state.
+      if (!byPhone && data.role === "PRO" && data.proCategory) {
+        const newPro: Pro = {
+          id: newId(),
+          name: data.username,
+          category: data.proCategory,
+          bio: `New ${data.proCategory} professional in GMC. Awaiting verification.`,
+          certified: false,
+          avgRating: 0,
+          totalJobs: 0,
+          baseRateNu: 300,
+          yearsExperience: 1,
+          phone: data.phone,
+          preciseAddress: data.residenceAddress,
+          generalArea: "GMC (pending verification)",
+          avatarSeed: data.username.toLowerCase().replace(/\s+/g, "-"),
+          status: "active",
+          isApproved: false, // gatekeeper — Admin/Analyst must approve before public listing.
+        };
+        nextPros = [newPro, ...prev.pros];
+        proIdForUser = newPro.id;
+      }
+
       const profile: UserProfile = byPhone
-        ? { ...byPhone, ...data, lastLoginAt: now, status: byPhone.status ?? "active" }
-        : { id: newId(), createdAt: now, lastLoginAt: now, status: "active", ...data };
+        ? { ...byPhone, ...data, proId: proIdForUser, lastLoginAt: now, status: byPhone.status ?? "active" }
+        : { id: newId(), createdAt: now, lastLoginAt: now, status: "active", ...data, proId: proIdForUser };
+
       const registry = byPhone
         ? prev.registry.map((u) => (u.id === byPhone.id ? profile : u))
         : [...prev.registry, profile];
-      return { ...prev, user: profile, registry };
+
+      result = { ok: true, user: profile };
+      return { ...prev, user: profile, registry, pros: nextPros };
     });
     return result;
   }, []);
