@@ -95,9 +95,15 @@ export const SiteLayout = ({ children }: { children: ReactNode }) => {
                     KYC Verified
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/jobs")}>
-                    <User className="mr-2 h-4 w-4" /> My Jobs
-                  </DropdownMenuItem>
+                  {user.role === "PRO" ? (
+                    <DropdownMenuItem onClick={() => navigate("/pro-dashboard")}>
+                      <User className="mr-2 h-4 w-4" /> Pro Dashboard
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => navigate("/jobs")}>
+                      <User className="mr-2 h-4 w-4" /> My Jobs
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" /> Sign out
                   </DropdownMenuItem>
