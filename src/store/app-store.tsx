@@ -480,6 +480,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       addPro,
       updatePro,
       setProStatus,
+      setProApproval,
       removePro,
       setUserStatus,
     }),
@@ -487,7 +488,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       state, loginWithProfile, logout, createJob, submitQuote, acceptQuote,
       cancelJob, completeJob, rateJob, sendMessage,
       adminLogin, adminLogout, setCategoryCommission,
-      addPro, updatePro, setProStatus, removePro, setUserStatus,
+      addPro, updatePro, setProStatus, setProApproval, removePro, setUserStatus,
     ],
   );
 
