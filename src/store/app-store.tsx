@@ -1,12 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId } from "@/data/marketplace";
+import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId, type IdDocType } from "@/data/marketplace";
+
+export type UserRole = "CUSTOMER" | "PRO" | "ANALYST";
 
 export interface UserProfile {
   id: string;
   phone: string;
   username: string;
-  cid: string;            // 11-digit CID (stored masked in UI; in real app would be encrypted server-side)
+  /** Type of identity document used at registration. */
+  idDocType: IdDocType;
+  /** Identity document number (CID / Passport / GMC Resident Card / Work Permit). */
+  idDocNumber: string;
+  /** @deprecated Kept for backwards-compat with previously persisted profiles. */
+  cid?: string;
   residenceAddress: string;
+  /** Marketplace role — determines post-login routing. */
+  role: UserRole;
+  /** If role === "PRO", which service category they offer. */
+  proCategory?: CategoryId;
+  /** If role === "PRO", links to the Pro listing record. */
+  proId?: string;
   createdAt: number;
   /** Last login timestamp — used for DAU analytics. */
   lastLoginAt?: number;
@@ -64,7 +77,7 @@ interface AppState {
 }
 
 interface AppContextValue extends AppState {
-  loginWithProfile: (data: Omit<UserProfile, "id" | "createdAt">) => { ok: true } | { ok: false; error: string };
+  loginWithProfile: (data: Omit<UserProfile, "id" | "createdAt">) => { ok: true; user: UserProfile } | { ok: false; error: string };
   logout: () => void;
   createJob: (input: { proId: string; description: string }) => Job | null;
   submitQuote: (jobId: string, complexityFeeNu: number) => void;
@@ -77,16 +90,18 @@ interface AppContextValue extends AppState {
   adminLogin: (username: string, password: string) => { ok: true; role: AdminRole } | { ok: false; error: string };
   adminLogout: () => void;
   setCategoryCommission: (categoryId: CategoryId, pct: number) => void;
-  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => void;
+  addPro: (input: Omit<Pro, "id" | "avgRating" | "totalJobs" | "status"> & { avgRating?: number; status?: "active" | "suspended" }) => Pro;
   updatePro: (proId: string, patch: Partial<Pro>) => void;
   setProStatus: (proId: string, status: "active" | "suspended") => void;
+  /** Toggle the public visibility of a pro after admin verification. */
+  setProApproval: (proId: string, isApproved: boolean) => void;
   removePro: (proId: string) => void;
   setUserStatus: (userId: string, status: "active" | "suspended") => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v2";
+const STORAGE_KEY = "gmc-service-hub:v3";
 
 interface PersistedState {
   user: UserProfile | null;
@@ -103,7 +118,9 @@ const defaultCommission = (): Record<CategoryId, number> =>
     return acc;
   }, {} as Record<CategoryId, number>);
 
-const seededPros = (): Pro[] => MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active" }));
+// Seeded MOCK_PROS are the initial directory — auto-approved so the demo isn't empty.
+const seededPros = (): Pro[] =>
+  MOCK_PROS.map((p) => ({ ...p, status: p.status ?? "active", isApproved: p.isApproved ?? true }));
 
 const emptyState = (): PersistedState => ({
   user: null,
@@ -114,6 +131,23 @@ const emptyState = (): PersistedState => ({
   admin: null,
 });
 
+/** Migrate any pre-existing profile shape (which only had `cid`) to the new id-doc shape. */
+const migrateProfile = (u: Partial<UserProfile> & { cid?: string }): UserProfile => ({
+  id: u.id ?? newId(),
+  phone: u.phone ?? "",
+  username: u.username ?? "Resident",
+  idDocType: u.idDocType ?? "cid",
+  idDocNumber: u.idDocNumber ?? u.cid ?? "",
+  cid: u.cid,
+  residenceAddress: u.residenceAddress ?? "",
+  role: u.role ?? "CUSTOMER",
+  proCategory: u.proCategory,
+  proId: u.proId,
+  createdAt: u.createdAt ?? Date.now(),
+  lastLoginAt: u.lastLoginAt,
+  status: u.status ?? "active",
+});
+
 const loadState = (): PersistedState => {
   if (typeof window === "undefined") return emptyState();
   try {
@@ -122,12 +156,12 @@ const loadState = (): PersistedState => {
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
     const base = emptyState();
     return {
-      user: parsed.user ?? null,
+      user: parsed.user ? migrateProfile(parsed.user) : null,
       pros: parsed.pros && parsed.pros.length > 0
-        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active" }))
+        ? parsed.pros.map((p) => ({ ...p, status: p.status ?? "active", isApproved: p.isApproved ?? true }))
         : base.pros,
       jobs: parsed.jobs ?? [],
-      registry: parsed.registry ?? [],
+      registry: (parsed.registry ?? []).map(migrateProfile),
       categoryCommission: { ...base.categoryCommission, ...(parsed.categoryCommission ?? {}) },
       admin: parsed.admin ?? null,
     };
@@ -150,24 +184,61 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, [state]);
 
   const loginWithProfile: AppContextValue["loginWithProfile"] = useCallback((data) => {
-    let result: { ok: true } | { ok: false; error: string } = { ok: true };
+    let result: { ok: true; user: UserProfile } | { ok: false; error: string } = {
+      ok: false,
+      error: "Login failed.",
+    };
     setState((prev) => {
-      // Duplicate CID prevention.
-      const existing = prev.registry.find((u) => u.cid === data.cid);
-      if (existing && existing.phone !== data.phone) {
-        result = { ok: false, error: "This CID is already registered with a different phone number." };
+      // Duplicate ID-document prevention (same number used by a different phone).
+      const dup = prev.registry.find(
+        (u) =>
+          u.idDocType === data.idDocType &&
+          u.idDocNumber === data.idDocNumber &&
+          u.phone !== data.phone,
+      );
+      if (dup) {
+        result = { ok: false, error: "This ID document is already registered with a different phone number." };
         return prev;
       }
-      // Reuse existing profile by phone if present.
+      // Reuse existing profile by phone if present (returning user).
       const byPhone = prev.registry.find((u) => u.phone === data.phone);
       const now = Date.now();
+      let nextPros = prev.pros;
+      let proIdForUser = byPhone?.proId;
+
+      // If signing up as a PRO for the first time, create a Pro listing in "pending approval" state.
+      if (!byPhone && data.role === "PRO" && data.proCategory) {
+        const newPro: Pro = {
+          id: newId(),
+          name: data.username,
+          category: data.proCategory,
+          bio: `New ${data.proCategory} professional in GMC. Awaiting verification.`,
+          certified: false,
+          avgRating: 0,
+          totalJobs: 0,
+          baseRateNu: 300,
+          yearsExperience: 1,
+          phone: data.phone,
+          preciseAddress: data.residenceAddress,
+          generalArea: "GMC (pending verification)",
+          avatarSeed: data.username.toLowerCase().replace(/\s+/g, "-"),
+          status: "active",
+          isApproved: false, // gatekeeper — Admin/Analyst must approve before public listing.
+        };
+        nextPros = [newPro, ...prev.pros];
+        proIdForUser = newPro.id;
+      }
+
       const profile: UserProfile = byPhone
-        ? { ...byPhone, ...data, lastLoginAt: now, status: byPhone.status ?? "active" }
-        : { id: newId(), createdAt: now, lastLoginAt: now, status: "active", ...data };
+        ? { ...byPhone, ...data, proId: proIdForUser, lastLoginAt: now, status: byPhone.status ?? "active" }
+        : { id: newId(), createdAt: now, lastLoginAt: now, status: "active", ...data, proId: proIdForUser };
+
       const registry = byPhone
         ? prev.registry.map((u) => (u.id === byPhone.id ? profile : u))
         : [...prev.registry, profile];
-      return { ...prev, user: profile, registry };
+
+      result = { ok: true, user: profile };
+      return { ...prev, user: profile, registry, pros: nextPros };
     });
     return result;
   }, []);
@@ -346,19 +417,16 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const addPro: AppContextValue["addPro"] = useCallback((input) => {
-    setState((prev) => ({
-      ...prev,
-      pros: [
-        {
-          id: newId(),
-          avgRating: input.avgRating ?? 4.5,
-          totalJobs: 0,
-          status: input.status ?? "active",
-          ...input,
-        },
-        ...prev.pros,
-      ],
-    }));
+    const created: Pro = {
+      id: newId(),
+      avgRating: input.avgRating ?? 4.5,
+      totalJobs: 0,
+      status: input.status ?? "active",
+      isApproved: input.isApproved ?? true, // pros added via Admin form are trusted by default.
+      ...input,
+    };
+    setState((prev) => ({ ...prev, pros: [created, ...prev.pros] }));
+    return created;
   }, []);
 
   const updatePro = useCallback((proId: string, patch: Partial<Pro>) => {
@@ -372,6 +440,13 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setState((prev) => ({
       ...prev,
       pros: prev.pros.map((p) => (p.id === proId ? { ...p, status } : p)),
+    }));
+  }, []);
+
+  const setProApproval = useCallback((proId: string, isApproved: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      pros: prev.pros.map((p) => (p.id === proId ? { ...p, isApproved } : p)),
     }));
   }, []);
 
@@ -405,6 +480,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       addPro,
       updatePro,
       setProStatus,
+      setProApproval,
       removePro,
       setUserStatus,
     }),
@@ -412,7 +488,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       state, loginWithProfile, logout, createJob, submitQuote, acceptQuote,
       cancelJob, completeJob, rateJob, sendMessage,
       adminLogin, adminLogout, setCategoryCommission,
-      addPro, updatePro, setProStatus, removePro, setUserStatus,
+      addPro, updatePro, setProStatus, setProApproval, removePro, setUserStatus,
     ],
   );
 

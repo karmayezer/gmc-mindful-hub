@@ -56,7 +56,21 @@ export interface Pro {
   status?: "active" | "suspended";
   /** Optional certification reference shown in admin views. */
   certificationId?: string;
+  /** Gatekeeper flag — pro is hidden from public search until an Analyst/Admin approves them. */
+  isApproved?: boolean;
 }
+
+/** ID document types accepted at registration. */
+export type IdDocType = "cid" | "passport" | "gmc-resident" | "work-permit";
+
+export const ID_DOC_TYPES: { id: IdDocType; label: string; hint: string; pattern: RegExp; placeholder: string }[] = [
+  { id: "cid",          label: "Bhutanese CID",        hint: "11-digit Citizenship Identity Card",        pattern: /^\d{11}$/,            placeholder: "11-digit number" },
+  { id: "passport",     label: "Passport number",      hint: "For foreign residents",                     pattern: /^[A-Z0-9]{6,12}$/i,    placeholder: "e.g. P1234567" },
+  { id: "gmc-resident", label: "GMC Resident Card",    hint: "GMC-issued resident card number",            pattern: /^[A-Z0-9-]{4,20}$/i,   placeholder: "e.g. GMC-RC-00123" },
+  { id: "work-permit",  label: "Work Permit number",   hint: "For work-based residents",                  pattern: /^[A-Z0-9-]{4,20}$/i,   placeholder: "e.g. WP-2026-00045" },
+];
+
+export const getIdDocType = (id: IdDocType) => ID_DOC_TYPES.find((d) => d.id === id)!;
 
 export const MOCK_PROS: Pro[] = [
   // Plumbing

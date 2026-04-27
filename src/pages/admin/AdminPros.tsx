@@ -64,7 +64,7 @@ const blank = (): FormState => ({
 });
 
 const AdminPros = () => {
-  const { pros, addPro, updatePro, removePro, setProStatus } = useApp();
+  const { pros, addPro, updatePro, removePro, setProStatus, setProApproval } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(blank());
@@ -178,6 +178,7 @@ const AdminPros = () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Approval</TableHead>
                 <TableHead>Cert ID</TableHead>
                 <TableHead>Rating</TableHead>
                 <TableHead>Jobs</TableHead>
@@ -189,6 +190,7 @@ const AdminPros = () => {
             <TableBody>
               {filtered.map((p) => {
                 const status = p.status ?? "active";
+                const approved = p.isApproved !== false;
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
@@ -198,6 +200,14 @@ const AdminPros = () => {
                       )}
                     </TableCell>
                     <TableCell>{getCategoryName(p.category)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={approved ? "secondary" : "outline"}
+                        className={approved ? "" : "border-accent text-accent-foreground bg-accent/15"}
+                      >
+                        {approved ? "Approved" : "Pending"}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{p.certificationId ?? "—"}</TableCell>
                     <TableCell>
                       <span className={p.avgRating < 3 ? "text-destructive font-semibold" : ""}>
@@ -212,6 +222,16 @@ const AdminPros = () => {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
+                      <Button
+                        variant={approved ? "ghost" : "hero"}
+                        size="sm"
+                        onClick={() => {
+                          setProApproval(p.id, !approved);
+                          toast({ title: approved ? "Pro un-approved" : "Pro approved & listed publicly" });
+                        }}
+                      >
+                        {approved ? "Un-approve" : "Approve"}
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p)} aria-label="Edit">
                         <Pencil className="h-4 w-4" />
                       </Button>

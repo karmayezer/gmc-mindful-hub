@@ -8,7 +8,9 @@ import { useApp } from "@/store/app-store";
 
 const Index = () => {
   const { pros } = useApp();
-  const featured = [...pros].sort((a, b) => b.avgRating - a.avgRating).slice(0, 3);
+  // Public-facing lists must hide pros awaiting admin approval.
+  const publicPros = pros.filter((p) => p.isApproved !== false);
+  const featured = [...publicPros].sort((a, b) => b.avgRating - a.avgRating).slice(0, 3);
 
   return (
     <>
