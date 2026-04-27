@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useApp } from "@/store/app-store";
+import { getIdDocType } from "@/data/marketplace";
 import { downloadCsv, maskCid } from "@/lib/admin-utils";
 
 const AdminUsers = () => {
@@ -114,7 +115,10 @@ const AdminUsers = () => {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{u.phone}</TableCell>
-                      <TableCell className="font-mono text-xs">{maskCid(u.cid)}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        <span className="text-muted-foreground mr-1">{getIdDocType(u.idDocType).label}:</span>
+                        {maskCid(u.idDocNumber || u.cid || "")}
+                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-[260px] truncate">
                         {u.residenceAddress}
                       </TableCell>
