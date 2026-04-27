@@ -11,9 +11,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useApp } from "@/store/app-store";
+import { useApp, type UserRole } from "@/store/app-store";
+import {
+  CATEGORIES,
+  ID_DOC_TYPES,
+  getIdDocType,
+  type CategoryId,
+  type IdDocType,
+} from "@/data/marketplace";
 import {
   ArrowRight,
   ShieldCheck,
@@ -23,6 +37,8 @@ import {
   Mail,
   Lock,
   Building2,
+  Briefcase,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -50,12 +66,6 @@ const phoneSchema = z
   .trim()
   .regex(/^\+?\d{8,15}$/, "Enter a valid phone number (8–15 digits).");
 
-const profileSchema = z.object({
-  username: z.string().trim().min(2, "At least 2 characters.").max(40, "Max 40 characters."),
-  cid: z.string().trim().regex(/^\d{11}$/, "Bhutan CID is 11 digits."),
-  residenceAddress: z.string().trim().min(4, "Please enter your GMC address.").max(160, "Too long."),
-});
-
 const staffEmailSchema = z
   .string()
   .trim()
@@ -78,8 +88,11 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
   const [phone, setPhone] = useState("+975");
   const [otp, setOtp] = useState("");
   const [username, setUsername] = useState("");
-  const [cid, setCid] = useState("");
+  const [idDocType, setIdDocType] = useState<IdDocType>("cid");
+  const [idDocNumber, setIdDocNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [signupRole, setSignupRole] = useState<UserRole>("CUSTOMER");
+  const [proCategory, setProCategory] = useState<CategoryId>("plumbing");
   const [error, setError] = useState<string | null>(null);
 
   // Staff flow state
@@ -100,6 +113,13 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
     onOpenChange(next);
   };
 
+  /** Smart Entrance: route the user to their home based on role. */
+  const routeForRole = (role: UserRole) => {
+    if (role === "ANALYST") return "/gmc-admin-control";
+    if (role === "PRO") return "/pro-dashboard";
+    return "/services";
+  };
+
   const handlePhoneSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -115,13 +135,17 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       const r = loginWithProfile({
         phone,
         username: existing.username,
-        cid: existing.cid,
+        idDocType: existing.idDocType,
+        idDocNumber: existing.idDocNumber,
         residenceAddress: existing.residenceAddress,
+        role: existing.role,
+        proCategory: existing.proCategory,
       });
       if (r.ok) {
         toast.success(`Welcome back, ${existing.username}`);
         handleClose(false);
         onSuccess?.();
+        navigate(routeForRole(r.user.role));
       }
     } else {
       setTimeout(() => setStep("profile"), 400);
@@ -131,20 +155,44 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const parsed = profileSchema.safeParse({ username, cid, residenceAddress: address });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+
+    // Validate fields step-by-step so each error message is specific.
+    if (username.trim().length < 2 || username.trim().length > 40) {
+      setError("Username must be 2–40 characters.");
       return;
     }
-    const { username: u, cid: c, residenceAddress: r } = parsed.data;
-    const result = loginWithProfile({ phone, username: u, cid: c, residenceAddress: r });
+    const docType = getIdDocType(idDocType);
+    const trimmedDoc = idDocNumber.trim();
+    if (!docType.pattern.test(trimmedDoc)) {
+      setError(`Invalid ${docType.label}. ${docType.hint}.`);
+      return;
+    }
+    if (address.trim().length < 4) {
+      setError("Please enter your GMC address.");
+      return;
+    }
+
+    const result = loginWithProfile({
+      phone,
+      username: username.trim(),
+      idDocType,
+      idDocNumber: trimmedDoc,
+      residenceAddress: address.trim(),
+      role: signupRole,
+      proCategory: signupRole === "PRO" ? proCategory : undefined,
+    });
     if (result.ok === false) {
       setError(result.error);
       return;
     }
-    toast.success("Profile created. You're verified.");
+    toast.success(
+      signupRole === "PRO"
+        ? "Profile created. Awaiting admin approval to appear in search."
+        : "Profile created. You're verified.",
+    );
     handleClose(false);
     onSuccess?.();
+    navigate(routeForRole(result.user.role));
   };
 
   const handleStaffSubmit = (e: React.FormEvent) => {
@@ -159,24 +207,26 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       setStaffError("Enter your staff password.");
       return;
     }
-    const username = STAFF_EMAIL_TO_USERNAME[parsed.data];
-    if (!username) {
+    const adminUsername = STAFF_EMAIL_TO_USERNAME[parsed.data];
+    if (!adminUsername) {
       setStaffError("This company email is not registered as staff.");
       return;
     }
-    const res = adminLogin(username, staffPassword);
+    const res = adminLogin(adminUsername, staffPassword);
     if (res.ok === false) {
       setStaffError(res.error);
       return;
     }
-    toast.success(`Welcome, ${username}. Entering Control Tower.`);
+    toast.success(`Welcome, ${adminUsername}. Entering Control Tower.`);
     handleClose(false);
     navigate("/gmc-admin-control");
   };
 
+  const docMeta = getIdDocType(idDocType);
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md p-0 overflow-hidden border-border/60">
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden border-border/60 max-h-[90vh] overflow-y-auto">
         <div className="bg-gradient-primary px-6 py-5 text-primary-foreground">
           <div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] opacity-90">
             <ShieldCheck className="h-3.5 w-3.5" /> Secure access
@@ -189,16 +239,16 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
                 ? "Sign in to GMC Service Hub"
                 : step === "otp"
                 ? "Verify your phone"
-                : "Complete your KYC profile"}
+                : "Complete your profile"}
             </DialogTitle>
             <DialogDescription className="text-primary-foreground/85">
               {mode === "staff"
                 ? `Restricted to verified @${COMPANY_EMAIL_DOMAIN} accounts.`
                 : step === "phone"
-                ? "Phone-first sign in. Direct login enabled — no OTP required for now."
+                ? "Phone-first sign in. One entrance for residents and professionals."
                 : step === "otp"
                 ? "We auto-filled your code in this preview. Tap continue."
-                : "A few details to verify you as a GMC resident."}
+                : "A few details to verify you and set up your role."}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -280,8 +330,29 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
 
               {step === "profile" && (
                 <form onSubmit={handleProfileSubmit} className="space-y-4">
+                  {/* Role selector — Customer vs Professional */}
                   <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
+                    <Label>I'm signing up as</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <RoleCard
+                        active={signupRole === "CUSTOMER"}
+                        onClick={() => setSignupRole("CUSTOMER")}
+                        icon={<Sparkles className="h-4 w-4" />}
+                        title="Customer"
+                        sub="Book services"
+                      />
+                      <RoleCard
+                        active={signupRole === "PRO"}
+                        onClick={() => setSignupRole("PRO")}
+                        icon={<Briefcase className="h-4 w-4" />}
+                        title="Professional"
+                        sub="Offer my services"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Full name</Label>
                     <div className="relative">
                       <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -289,25 +360,83 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         className="pl-10 h-11 rounded-xl"
-                        placeholder="e.g. Tashi D."
+                        placeholder="e.g. Tashi Dorji"
                         autoFocus
                       />
                     </div>
                   </div>
+
+                  {/* Pro-only: category */}
+                  {signupRole === "PRO" && (
+                    <div className="space-y-2">
+                      <Label>Your service category</Label>
+                      <Select
+                        value={proCategory}
+                        onValueChange={(v) => setProCategory(v as CategoryId)}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CATEGORIES.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} — {c.tagline}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        New professionals are reviewed by GMC admin before appearing in customer search.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ID document: type + number */}
                   <div className="space-y-2">
-                    <Label htmlFor="cid">CID number (11 digits)</Label>
-                    <Input
-                      id="cid"
-                      inputMode="numeric"
-                      value={cid}
-                      onChange={(e) => setCid(e.target.value.replace(/\D/g, "").slice(0, 11))}
-                      className="h-11 rounded-xl tracking-widest"
-                      placeholder="•••••••••••"
-                    />
+                    <Label>Identity document</Label>
+                    <div className="grid grid-cols-5 gap-2">
+                      <div className="col-span-2">
+                        <Select
+                          value={idDocType}
+                          onValueChange={(v) => {
+                            setIdDocType(v as IdDocType);
+                            setIdDocNumber("");
+                          }}
+                        >
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ID_DOC_TYPES.map((d) => (
+                              <SelectItem key={d.id} value={d.id}>
+                                {d.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="col-span-3">
+                        <Input
+                          id="idDocNumber"
+                          inputMode={idDocType === "cid" ? "numeric" : "text"}
+                          value={idDocNumber}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            const cleaned = idDocType === "cid"
+                              ? raw.replace(/\D/g, "").slice(0, 11)
+                              : raw.toUpperCase().slice(0, 20);
+                            setIdDocNumber(cleaned);
+                          }}
+                          className="h-11 rounded-xl tracking-wider"
+                          placeholder={docMeta.placeholder}
+                        />
+                      </div>
+                    </div>
                     <p className="text-xs text-muted-foreground">
-                      Encrypted and stored securely. Used only for one-time verification.
+                      {docMeta.hint}. Stored securely and used only for one-time verification.
                     </p>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="address">GMC residence address</Label>
                     <Input
@@ -318,6 +447,7 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
                       placeholder="House / Apt, Sector, GMC"
                     />
                   </div>
+
                   {error && <p className="text-sm text-destructive">{error}</p>}
                   <Button type="submit" variant="hero" size="lg" className="w-full">
                     Verify & enter <ArrowRight className="ml-1 h-4 w-4" />
@@ -384,3 +514,33 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
     </Dialog>
   );
 };
+
+const RoleCard = ({
+  active,
+  onClick,
+  icon,
+  title,
+  sub,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`text-left rounded-xl border p-3 transition-smooth ${
+      active
+        ? "border-primary bg-primary-soft ring-2 ring-primary/30"
+        : "border-border bg-card hover:border-primary/40"
+    }`}
+  >
+    <div className={`flex items-center gap-1.5 text-sm font-semibold ${active ? "text-primary" : "text-foreground"}`}>
+      {icon}
+      {title}
+    </div>
+    <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+  </button>
+);
