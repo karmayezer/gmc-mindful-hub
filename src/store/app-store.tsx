@@ -1,12 +1,25 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId } from "@/data/marketplace";
+import { MOCK_PROS, CATEGORIES, type Pro, type CategoryId, type IdDocType } from "@/data/marketplace";
+
+export type UserRole = "CUSTOMER" | "PRO" | "ANALYST";
 
 export interface UserProfile {
   id: string;
   phone: string;
   username: string;
-  cid: string;            // 11-digit CID (stored masked in UI; in real app would be encrypted server-side)
+  /** Type of identity document used at registration. */
+  idDocType: IdDocType;
+  /** Identity document number (CID / Passport / GMC Resident Card / Work Permit). */
+  idDocNumber: string;
+  /** @deprecated Kept for backwards-compat with previously persisted profiles. */
+  cid?: string;
   residenceAddress: string;
+  /** Marketplace role — determines post-login routing. */
+  role: UserRole;
+  /** If role === "PRO", which service category they offer. */
+  proCategory?: CategoryId;
+  /** If role === "PRO", links to the Pro listing record. */
+  proId?: string;
   createdAt: number;
   /** Last login timestamp — used for DAU analytics. */
   lastLoginAt?: number;
