@@ -38,18 +38,14 @@ const STATUS_TONE: Record<Job["status"], string> = {
 const ProDashboard = () => {
   const { user, jobs, pros, submitQuote, sendMessage, completeJob, cancelJob, categoryCommission } = useApp();
 
-  // 🔒 Route guard — only signed-in PROs can be here.
-  if (!user) return <Navigate to="/" replace />;
-  if (user.role !== "PRO") return <Navigate to="/" replace />;
-
   // 🔍 The Pro's own listing record (used for approval gating + commission %).
-  const myProRecord = pros.find((p) => p.id === user.proId);
+  const myProRecord = pros.find((p) => p.id === user?.proId);
   const isApproved = myProRecord?.isApproved ?? false;
 
-  // 🧮 Job List Logic — only jobs assigned to THIS pro.
+  // 🧮 Job List Logic — only jobs assigned to THIS pro (computed up-front so hook order is stable).
   const myJobs = useMemo(
-    () => jobs.filter((j) => j.proId === user.proId).sort((a, b) => b.createdAt - a.createdAt),
-    [jobs, user.proId],
+    () => jobs.filter((j) => j.proId === user?.proId).sort((a, b) => b.createdAt - a.createdAt),
+    [jobs, user?.proId],
   );
 
   const buckets = useMemo(
@@ -61,6 +57,10 @@ const ProDashboard = () => {
     }),
     [myJobs],
   );
+
+  // 🔒 Route guard — only signed-in PROs can be here. (Hooks already run above.)
+  if (!user) return <Navigate to="/" replace />;
+  if (user.role !== "PRO") return <Navigate to="/" replace />;
 
   return (
     <section className="container py-10 lg:py-14 space-y-8">
