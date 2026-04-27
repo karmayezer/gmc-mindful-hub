@@ -64,7 +64,7 @@ const blank = (): FormState => ({
 });
 
 const AdminPros = () => {
-  const { pros, addPro, updatePro, removePro, setProStatus } = useApp();
+  const { pros, addPro, updatePro, removePro, setProStatus, setProApproval } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(blank());
@@ -178,6 +178,7 @@ const AdminPros = () => {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Approval</TableHead>
                 <TableHead>Cert ID</TableHead>
                 <TableHead>Rating</TableHead>
                 <TableHead>Jobs</TableHead>
