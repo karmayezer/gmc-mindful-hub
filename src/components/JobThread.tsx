@@ -40,6 +40,8 @@ export const JobThread = ({ job, pro, perspective = "customer" }: JobThreadProps
   const commissionPct = category?.commissionPct ?? job.commissionPct;
 
   const [complexity, setComplexity] = useState<string>("");
+  const [scopeNotes, setScopeNotes] = useState("");
+  const [feeAck, setFeeAck] = useState(false);
   const [message, setMessage] = useState("");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -60,8 +62,19 @@ export const JobThread = ({ job, pro, perspective = "customer" }: JobThreadProps
       toast.error("Enter a valid Nu. amount.");
       return;
     }
+    if (scopeNotes.trim().length < 50) {
+      toast.error("Scope notes must be at least 50 characters.");
+      return;
+    }
+    if (!feeAck) {
+      toast.error("Please acknowledge the platform service fee.");
+      return;
+    }
     submitQuote(job.id, n);
+    sendMessage(job.id, "pro", `Scope: ${scopeNotes.trim()}`);
     toast.success("Quote sent to customer.");
+    setScopeNotes("");
+    setFeeAck(false);
   };
 
   const handleSend = (e: React.FormEvent) => {
@@ -154,12 +167,44 @@ export const JobThread = ({ job, pro, perspective = "customer" }: JobThreadProps
               className="h-11 rounded-xl"
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="scope-notes">
+              Scope notes <span className="text-muted-foreground font-normal">(min. 50 characters)</span>
+            </Label>
+            <Textarea
+              id="scope-notes"
+              rows={3}
+              value={scopeNotes}
+              onChange={(e) => setScopeNotes(e.target.value.slice(0, 800))}
+              placeholder="Define exactly what's included, e.g. 'Includes labor and standard fittings; replacement parts billed separately at cost.'"
+              className="rounded-xl"
+            />
+            <p className="text-[11px] text-muted-foreground text-right">{scopeNotes.trim().length}/50</p>
+          </div>
           <div className="rounded-xl border border-border/60 bg-background p-3 grid grid-cols-3 gap-2">
             <Stat label="Total charge" value={formatNu(previewTotal.total)} accent />
             <Stat label={`Platform fee (${commissionPct}%)`} value={formatNu(previewTotal.fee)} />
             <Stat label="Your payout" value={formatNu(previewTotal.payout)} />
           </div>
-          <Button type="submit" variant="hero" className="w-full">Send quote</Button>
+          <label className="flex items-start gap-2 rounded-xl bg-secondary-soft/40 p-3 text-xs leading-relaxed cursor-pointer">
+            <input
+              type="checkbox"
+              checked={feeAck}
+              onChange={(e) => setFeeAck(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary"
+            />
+            <span>
+              I understand that <strong>{commissionPct}% ({formatNu(previewTotal.fee)})</strong> will be deducted as a platform service fee upon completion.
+            </span>
+          </label>
+          <Button
+            type="submit"
+            variant="hero"
+            className="w-full"
+            disabled={!feeAck || scopeNotes.trim().length < 50 || !complexity}
+          >
+            Send quote
+          </Button>
         </form>
       )}
 

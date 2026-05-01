@@ -191,6 +191,22 @@ const AdminPros = () => {
               {filtered.map((p) => {
                 const status = p.status ?? "active";
                 const approved = p.isApproved !== false;
+                // Traffic-light risk score (BRD §10.1):
+                //   Red    – missing/invalid certification ID (must be reviewed)
+                //   Yellow – documents present but not yet approved
+                //   Green  – approved & live
+                const certOk = !!p.certificationId && p.certificationId.trim().length >= 4;
+                const light: "red" | "yellow" | "green" = approved
+                  ? "green"
+                  : certOk
+                  ? "yellow"
+                  : "red";
+                const lightStyle = {
+                  red:    "bg-destructive/15 text-destructive border-destructive/40",
+                  yellow: "bg-accent/20 text-accent-foreground border-accent/50",
+                  green:  "bg-primary-soft text-primary border-primary/40",
+                }[light];
+                const lightLabel = { red: "Red · Missing docs", yellow: "Yellow · Review", green: "Green · Approved" }[light];
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">
@@ -201,11 +217,14 @@ const AdminPros = () => {
                     </TableCell>
                     <TableCell>{getCategoryName(p.category)}</TableCell>
                     <TableCell>
-                      <Badge
-                        variant={approved ? "secondary" : "outline"}
-                        className={approved ? "" : "border-accent text-accent-foreground bg-accent/15"}
-                      >
-                        {approved ? "Approved" : "Pending"}
+                      <Badge variant="outline" className={lightStyle}>
+                        <span
+                          aria-hidden
+                          className={`mr-1.5 inline-block h-2 w-2 rounded-full ${
+                            light === "red" ? "bg-destructive" : light === "yellow" ? "bg-accent" : "bg-primary"
+                          }`}
+                        />
+                        {lightLabel}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{p.certificationId ?? "—"}</TableCell>

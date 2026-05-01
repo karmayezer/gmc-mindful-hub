@@ -39,6 +39,10 @@ import {
   Building2,
   Briefcase,
   Sparkles,
+  FileCheck2,
+  Upload,
+  Hourglass,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -94,6 +98,10 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
   const [signupRole, setSignupRole] = useState<UserRole>("CUSTOMER");
   const [proCategory, setProCategory] = useState<CategoryId>("plumbing");
   const [error, setError] = useState<string | null>(null);
+  // 4-step Pro verification wizard (BRD §9.1). Only used when signupRole === "PRO".
+  const [proStep, setProStep] = useState<1 | 2 | 3 | 4>(1);
+  const [credentialFileName, setCredentialFileName] = useState<string | null>(null);
+  const [submittedAsPro, setSubmittedAsPro] = useState(false);
 
   // Staff flow state
   const [staffEmail, setStaffEmail] = useState("");
@@ -106,6 +114,9 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
     setError(null);
     setStaffError(null);
     setStaffPassword("");
+    setProStep(1);
+    setCredentialFileName(null);
+    setSubmittedAsPro(false);
   };
 
   const handleClose = (next: boolean) => {
@@ -185,11 +196,14 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       setError(result.error);
       return;
     }
-    toast.success(
-      signupRole === "PRO"
-        ? "Profile created. Awaiting admin approval to appear in search."
-        : "Profile created. You're verified.",
-    );
+    if (signupRole === "PRO") {
+      // Show the "Wait State" screen instead of routing to the dashboard immediately.
+      setSubmittedAsPro(true);
+      setProStep(4);
+      toast.success("Submitted for review. We'll notify you once an analyst approves your profile.");
+      return;
+    }
+    toast.success("Profile created. You're verified.");
     handleClose(false);
     onSuccess?.();
     navigate(routeForRole(result.user.role));
@@ -329,21 +343,21 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
               )}
 
               {step === "profile" && (
-                <form onSubmit={handleProfileSubmit} className="space-y-4">
+                <div className="space-y-4">
                   {/* Role selector — Customer vs Professional */}
                   <div className="space-y-2">
                     <Label>I'm signing up as</Label>
                     <div className="grid grid-cols-2 gap-2">
                       <RoleCard
                         active={signupRole === "CUSTOMER"}
-                        onClick={() => setSignupRole("CUSTOMER")}
+                        onClick={() => { setSignupRole("CUSTOMER"); setProStep(1); setSubmittedAsPro(false); }}
                         icon={<Sparkles className="h-4 w-4" />}
                         title="Customer"
                         sub="Book services"
                       />
                       <RoleCard
                         active={signupRole === "PRO"}
-                        onClick={() => setSignupRole("PRO")}
+                        onClick={() => { setSignupRole("PRO"); setProStep(1); }}
                         icon={<Briefcase className="h-4 w-4" />}
                         title="Professional"
                         sub="Offer my services"
@@ -351,108 +365,195 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Full name</Label>
-                    <div className="relative">
-                      <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="pl-10 h-11 rounded-xl"
-                        placeholder="e.g. Tashi Dorji"
-                        autoFocus
+                  {/* ============ CUSTOMER: single-step form ============ */}
+                  {signupRole === "CUSTOMER" && (
+                    <form onSubmit={handleProfileSubmit} className="space-y-4">
+                      <NameField username={username} setUsername={setUsername} />
+                      <IdDocFields
+                        idDocType={idDocType}
+                        setIdDocType={setIdDocType}
+                        idDocNumber={idDocNumber}
+                        setIdDocNumber={setIdDocNumber}
+                        docMeta={docMeta}
                       />
-                    </div>
-                  </div>
-
-                  {/* Pro-only: category */}
-                  {signupRole === "PRO" && (
-                    <div className="space-y-2">
-                      <Label>Your service category</Label>
-                      <Select
-                        value={proCategory}
-                        onValueChange={(v) => setProCategory(v as CategoryId)}
-                      >
-                        <SelectTrigger className="h-11 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {CATEGORIES.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name} — {c.tagline}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        New professionals are reviewed by GMC admin before appearing in customer search.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* ID document: type + number */}
-                  <div className="space-y-2">
-                    <Label>Identity document</Label>
-                    <div className="grid grid-cols-5 gap-2">
-                      <div className="col-span-2">
-                        <Select
-                          value={idDocType}
-                          onValueChange={(v) => {
-                            setIdDocType(v as IdDocType);
-                            setIdDocNumber("");
-                          }}
-                        >
-                          <SelectTrigger className="h-11 rounded-xl">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ID_DOC_TYPES.map((d) => (
-                              <SelectItem key={d.id} value={d.id}>
-                                {d.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="col-span-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="address">GMC residence address</Label>
                         <Input
-                          id="idDocNumber"
-                          inputMode={idDocType === "cid" ? "numeric" : "text"}
-                          value={idDocNumber}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            const cleaned = idDocType === "cid"
-                              ? raw.replace(/\D/g, "").slice(0, 11)
-                              : raw.toUpperCase().slice(0, 20);
-                            setIdDocNumber(cleaned);
-                          }}
-                          className="h-11 rounded-xl tracking-wider"
-                          placeholder={docMeta.placeholder}
+                          id="address"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          className="h-11 rounded-xl"
+                          placeholder="House / Apt, Sector, GMC"
                         />
                       </div>
+                      {error && <p className="text-sm text-destructive">{error}</p>}
+                      <Button type="submit" variant="hero" size="lg" className="w-full">
+                        Verify & enter <ArrowRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </form>
+                  )}
+
+                  {/* ============ PRO: 4-step Verification Vault (BRD §9.1) ============ */}
+                  {signupRole === "PRO" && (
+                    <div className="space-y-4">
+                      <ProWizardStepper current={proStep} />
+
+                      {proStep === 1 && (
+                        <div className="space-y-4">
+                          <StepHeader
+                            icon={<FileCheck2 className="h-5 w-5 text-primary" />}
+                            title="Identity capture"
+                            sub="We verify every professional before they appear in customer search."
+                          />
+                          <NameField username={username} setUsername={setUsername} />
+                          <IdDocFields
+                            idDocType={idDocType}
+                            setIdDocType={setIdDocType}
+                            idDocNumber={idDocNumber}
+                            setIdDocNumber={setIdDocNumber}
+                            docMeta={docMeta}
+                          />
+                          <Button
+                            variant="hero"
+                            size="lg"
+                            className="w-full"
+                            onClick={() => {
+                              setError(null);
+                              if (username.trim().length < 2) { setError("Enter your full name."); return; }
+                              if (!docMeta.pattern.test(idDocNumber.trim())) {
+                                setError(`Invalid ${docMeta.label}. ${docMeta.hint}.`); return;
+                              }
+                              setProStep(2);
+                            }}
+                          >
+                            Continue <ArrowRight className="ml-1 h-4 w-4" />
+                          </Button>
+                          {error && <p className="text-sm text-destructive">{error}</p>}
+                        </div>
+                      )}
+
+                      {proStep === 2 && (
+                        <div className="space-y-4">
+                          <StepHeader
+                            icon={<Briefcase className="h-5 w-5 text-primary" />}
+                            title="Category selection"
+                            sub="Pick exactly one specialty. You can request more later."
+                          />
+                          <div className="space-y-2">
+                            <Label>Your service category</Label>
+                            <Select value={proCategory} onValueChange={(v) => setProCategory(v as CategoryId)}>
+                              <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {CATEGORIES.map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>{c.name} — {c.tagline}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="address">GMC residence address</Label>
+                            <Input
+                              id="address"
+                              value={address}
+                              onChange={(e) => setAddress(e.target.value)}
+                              className="h-11 rounded-xl"
+                              placeholder="House / Apt, Sector, GMC"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" className="flex-1" onClick={() => setProStep(1)}>Back</Button>
+                            <Button
+                              variant="hero"
+                              className="flex-1"
+                              onClick={() => {
+                                if (address.trim().length < 4) { setError("Please enter your GMC address."); return; }
+                                setError(null);
+                                setProStep(3);
+                              }}
+                            >
+                              Continue <ArrowRight className="ml-1 h-4 w-4" />
+                            </Button>
+                          </div>
+                          {error && <p className="text-sm text-destructive">{error}</p>}
+                        </div>
+                      )}
+
+                      {proStep === 3 && (
+                        <div className="space-y-4">
+                          <StepHeader
+                            icon={<Upload className="h-5 w-5 text-primary" />}
+                            title="Credentialing"
+                            sub="Upload trade licenses or permits issued by GMC or national authorities."
+                          />
+                          <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border/70 bg-muted/40 px-4 py-8 cursor-pointer hover:bg-muted/60 transition-smooth">
+                            <Upload className="h-6 w-6 text-muted-foreground" />
+                            <span className="text-sm font-medium">
+                              {credentialFileName ?? "Tap to upload trade license / permit"}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">PDF, JPG or PNG · up to 5 MB</span>
+                            <input
+                              type="file"
+                              accept=".pdf,image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0];
+                                if (f) setCredentialFileName(f.name);
+                              }}
+                            />
+                          </label>
+                          {credentialFileName && (
+                            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                              {credentialFileName} ready for analyst review.
+                            </p>
+                          )}
+                          <p className="text-[11px] text-muted-foreground">
+                            Demo note: file is referenced by name only; real upload activates with backend.
+                          </p>
+                          <form onSubmit={handleProfileSubmit} className="space-y-3">
+                            <div className="flex gap-2">
+                              <Button type="button" variant="outline" className="flex-1" onClick={() => setProStep(2)}>Back</Button>
+                              <Button type="submit" variant="hero" className="flex-1" disabled={!credentialFileName}>
+                                Submit for review
+                              </Button>
+                            </div>
+                            {error && <p className="text-sm text-destructive">{error}</p>}
+                          </form>
+                        </div>
+                      )}
+
+                      {proStep === 4 && submittedAsPro && (
+                        <div className="space-y-5 text-center py-3">
+                          <div className="mx-auto h-14 w-14 rounded-full bg-accent/20 grid place-items-center">
+                            <Hourglass className="h-7 w-7 text-accent-foreground" />
+                          </div>
+                          <div>
+                            <h3 className="font-display text-lg">Pending Analyst Review</h3>
+                            <p className="text-sm text-muted-foreground mt-1.5 max-w-xs mx-auto">
+                              Your application is in the GMC verification queue. You'll be visible in customer search once an analyst approves your profile.
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-secondary-soft/60 p-3 text-left text-xs space-y-1">
+                            <div><span className="text-muted-foreground">Name:</span> <span className="font-medium">{username}</span></div>
+                            <div><span className="text-muted-foreground">Category:</span> <span className="font-medium">{CATEGORIES.find(c => c.id === proCategory)?.name}</span></div>
+                            <div><span className="text-muted-foreground">Document:</span> <span className="font-medium">{docMeta.label}</span></div>
+                          </div>
+                          <Button
+                            variant="hero"
+                            className="w-full"
+                            onClick={() => {
+                              handleClose(false);
+                              onSuccess?.();
+                              navigate("/pro-dashboard");
+                            }}
+                          >
+                            Open my dashboard
+                          </Button>
+                        </div>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {docMeta.hint}. Stored securely and used only for one-time verification.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address">GMC residence address</Label>
-                    <Input
-                      id="address"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="h-11 rounded-xl"
-                      placeholder="House / Apt, Sector, GMC"
-                    />
-                  </div>
-
-                  {error && <p className="text-sm text-destructive">{error}</p>}
-                  <Button type="submit" variant="hero" size="lg" className="w-full">
-                    Verify & enter <ArrowRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </form>
+                  )}
+                </div>
               )}
             </TabsContent>
 
@@ -543,4 +644,111 @@ const RoleCard = ({
     </div>
     <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
   </button>
+);
+
+const NameField = ({ username, setUsername }: { username: string; setUsername: (s: string) => void }) => (
+  <div className="space-y-2">
+    <Label htmlFor="username">Full name</Label>
+    <div className="relative">
+      <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        id="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        className="pl-10 h-11 rounded-xl"
+        placeholder="e.g. Tashi Dorji"
+        autoFocus
+      />
+    </div>
+  </div>
+);
+
+const IdDocFields = ({
+  idDocType,
+  setIdDocType,
+  idDocNumber,
+  setIdDocNumber,
+  docMeta,
+}: {
+  idDocType: IdDocType;
+  setIdDocType: (t: IdDocType) => void;
+  idDocNumber: string;
+  setIdDocNumber: (s: string) => void;
+  docMeta: ReturnType<typeof getIdDocType>;
+}) => (
+  <div className="space-y-2">
+    <Label>Identity document</Label>
+    <div className="grid grid-cols-5 gap-2">
+      <div className="col-span-2">
+        <Select value={idDocType} onValueChange={(v) => { setIdDocType(v as IdDocType); setIdDocNumber(""); }}>
+          <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ID_DOC_TYPES.map((d) => (
+              <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-3">
+        <Input
+          inputMode={idDocType === "cid" ? "numeric" : "text"}
+          value={idDocNumber}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const cleaned = idDocType === "cid"
+              ? raw.replace(/\D/g, "").slice(0, 11)
+              : raw.toUpperCase().slice(0, 20);
+            setIdDocNumber(cleaned);
+          }}
+          className="h-11 rounded-xl tracking-wider"
+          placeholder={docMeta.placeholder}
+        />
+      </div>
+    </div>
+    <p className="text-xs text-muted-foreground">
+      {docMeta.hint}. Stored securely and used only for one-time verification.
+    </p>
+  </div>
+);
+
+const ProWizardStepper = ({ current }: { current: 1 | 2 | 3 | 4 }) => {
+  const labels = ["Identity", "Category", "Credentials", "Review"];
+  return (
+    <div className="flex items-center gap-1.5">
+      {labels.map((l, i) => {
+        const n = (i + 1) as 1 | 2 | 3 | 4;
+        const done = n < current;
+        const active = n === current;
+        return (
+          <div key={l} className="flex items-center gap-1.5 flex-1">
+            <div
+              className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold border ${
+                active
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : done
+                  ? "bg-primary-soft text-primary border-primary/40"
+                  : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {done ? "✓" : n}
+            </div>
+            <span className={`text-[11px] truncate ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+              {l}
+            </span>
+            {n < 4 && <div className={`flex-1 h-px ${done ? "bg-primary/40" : "bg-border"}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const StepHeader = ({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) => (
+  <div className="flex items-start gap-2.5">
+    <div className="h-9 w-9 rounded-xl bg-primary-soft grid place-items-center shrink-0">{icon}</div>
+    <div>
+      <h4 className="font-display text-sm font-semibold leading-tight">{title}</h4>
+      <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+    </div>
+  </div>
 );

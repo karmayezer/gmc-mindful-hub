@@ -101,7 +101,7 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v3";
+const STORAGE_KEY = "gmc-service-hub:v4";
 
 interface PersistedState {
   user: UserProfile | null;
@@ -409,7 +409,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const setCategoryCommission = useCallback((categoryId: CategoryId, pct: number) => {
-    const clamped = Math.max(10, Math.min(15, pct));
+    // BRD v1.2 §4.2: platform commission is fixed at 5% across all categories.
+    const clamped = Math.max(0, Math.min(100, pct));
     setState((prev) => ({
       ...prev,
       categoryCommission: { ...prev.categoryCommission, [categoryId]: clamped },

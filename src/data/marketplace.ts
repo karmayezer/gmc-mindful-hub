@@ -25,13 +25,16 @@ export interface Category {
   commissionPct: number;
 }
 
+/** Per BRD v1.2 §4.2: flat 5% platform commission across all categories. */
+export const PLATFORM_COMMISSION_PCT = 5;
+
 export const CATEGORIES: Category[] = [
-  { id: "plumbing", name: "Plumbing", tagline: "Pipes, taps & drainage", icon: Wrench, commissionPct: 12 },
-  { id: "electrician", name: "Electrician", tagline: "Wiring & safe installs", icon: Zap, commissionPct: 13 },
-  { id: "driver", name: "Driver", tagline: "Local transport on-call", icon: Car, commissionPct: 10 },
-  { id: "mechanic", name: "Mechanic", tagline: "Vehicle care & repair", icon: Cog, commissionPct: 12 },
-  { id: "cleaner", name: "Cleaner", tagline: "Mindful, thorough cleaning", icon: Sparkles, commissionPct: 15 },
-  { id: "masonry", name: "Masonry", tagline: "Stone, brick & finishing", icon: Hammer, commissionPct: 12 },
+  { id: "plumbing", name: "Plumbing", tagline: "Pipes, taps & drainage", icon: Wrench, commissionPct: PLATFORM_COMMISSION_PCT },
+  { id: "electrician", name: "Electrician", tagline: "Wiring & safe installs", icon: Zap, commissionPct: PLATFORM_COMMISSION_PCT },
+  { id: "driver", name: "Driver", tagline: "Local transport on-call", icon: Car, commissionPct: PLATFORM_COMMISSION_PCT },
+  { id: "mechanic", name: "Mechanic", tagline: "Vehicle care & repair", icon: Cog, commissionPct: PLATFORM_COMMISSION_PCT },
+  { id: "cleaner", name: "Cleaner", tagline: "Mindful, thorough cleaning", icon: Sparkles, commissionPct: PLATFORM_COMMISSION_PCT },
+  { id: "masonry", name: "Masonry", tagline: "Stone, brick & finishing", icon: Hammer, commissionPct: PLATFORM_COMMISSION_PCT },
 ];
 
 export const getCategory = (id: string): Category | undefined =>
