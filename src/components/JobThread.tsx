@@ -40,6 +40,8 @@ export const JobThread = ({ job, pro, perspective = "customer" }: JobThreadProps
   const commissionPct = category?.commissionPct ?? job.commissionPct;
 
   const [complexity, setComplexity] = useState<string>("");
+  const [scopeNotes, setScopeNotes] = useState("");
+  const [feeAck, setFeeAck] = useState(false);
   const [message, setMessage] = useState("");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
@@ -60,8 +62,19 @@ export const JobThread = ({ job, pro, perspective = "customer" }: JobThreadProps
       toast.error("Enter a valid Nu. amount.");
       return;
     }
+    if (scopeNotes.trim().length < 50) {
+      toast.error("Scope notes must be at least 50 characters.");
+      return;
+    }
+    if (!feeAck) {
+      toast.error("Please acknowledge the platform service fee.");
+      return;
+    }
     submitQuote(job.id, n);
+    sendMessage(job.id, "pro", `Scope: ${scopeNotes.trim()}`);
     toast.success("Quote sent to customer.");
+    setScopeNotes("");
+    setFeeAck(false);
   };
 
   const handleSend = (e: React.FormEvent) => {
