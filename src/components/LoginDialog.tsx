@@ -645,3 +645,110 @@ const RoleCard = ({
     <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
   </button>
 );
+
+const NameField = ({ username, setUsername }: { username: string; setUsername: (s: string) => void }) => (
+  <div className="space-y-2">
+    <Label htmlFor="username">Full name</Label>
+    <div className="relative">
+      <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <Input
+        id="username"
+        value={username}
+        onChange={(e) => setUsername(e.target.value)}
+        className="pl-10 h-11 rounded-xl"
+        placeholder="e.g. Tashi Dorji"
+        autoFocus
+      />
+    </div>
+  </div>
+);
+
+const IdDocFields = ({
+  idDocType,
+  setIdDocType,
+  idDocNumber,
+  setIdDocNumber,
+  docMeta,
+}: {
+  idDocType: IdDocType;
+  setIdDocType: (t: IdDocType) => void;
+  idDocNumber: string;
+  setIdDocNumber: (s: string) => void;
+  docMeta: ReturnType<typeof getIdDocType>;
+}) => (
+  <div className="space-y-2">
+    <Label>Identity document</Label>
+    <div className="grid grid-cols-5 gap-2">
+      <div className="col-span-2">
+        <Select value={idDocType} onValueChange={(v) => { setIdDocType(v as IdDocType); setIdDocNumber(""); }}>
+          <SelectTrigger className="h-11 rounded-xl"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {ID_DOC_TYPES.map((d) => (
+              <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="col-span-3">
+        <Input
+          inputMode={idDocType === "cid" ? "numeric" : "text"}
+          value={idDocNumber}
+          onChange={(e) => {
+            const raw = e.target.value;
+            const cleaned = idDocType === "cid"
+              ? raw.replace(/\D/g, "").slice(0, 11)
+              : raw.toUpperCase().slice(0, 20);
+            setIdDocNumber(cleaned);
+          }}
+          className="h-11 rounded-xl tracking-wider"
+          placeholder={docMeta.placeholder}
+        />
+      </div>
+    </div>
+    <p className="text-xs text-muted-foreground">
+      {docMeta.hint}. Stored securely and used only for one-time verification.
+    </p>
+  </div>
+);
+
+const ProWizardStepper = ({ current }: { current: 1 | 2 | 3 | 4 }) => {
+  const labels = ["Identity", "Category", "Credentials", "Review"];
+  return (
+    <div className="flex items-center gap-1.5">
+      {labels.map((l, i) => {
+        const n = (i + 1) as 1 | 2 | 3 | 4;
+        const done = n < current;
+        const active = n === current;
+        return (
+          <div key={l} className="flex items-center gap-1.5 flex-1">
+            <div
+              className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold border ${
+                active
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : done
+                  ? "bg-primary-soft text-primary border-primary/40"
+                  : "bg-muted text-muted-foreground border-border"
+              }`}
+            >
+              {done ? "✓" : n}
+            </div>
+            <span className={`text-[11px] truncate ${active ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+              {l}
+            </span>
+            {n < 4 && <div className={`flex-1 h-px ${done ? "bg-primary/40" : "bg-border"}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const StepHeader = ({ icon, title, sub }: { icon: React.ReactNode; title: string; sub: string }) => (
+  <div className="flex items-start gap-2.5">
+    <div className="h-9 w-9 rounded-xl bg-primary-soft grid place-items-center shrink-0">{icon}</div>
+    <div>
+      <h4 className="font-display text-sm font-semibold leading-tight">{title}</h4>
+      <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>
+    </div>
+  </div>
+);
