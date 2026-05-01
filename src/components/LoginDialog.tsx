@@ -114,6 +114,9 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
     setError(null);
     setStaffError(null);
     setStaffPassword("");
+    setProStep(1);
+    setCredentialFileName(null);
+    setSubmittedAsPro(false);
   };
 
   const handleClose = (next: boolean) => {
