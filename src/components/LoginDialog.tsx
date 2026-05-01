@@ -196,11 +196,14 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
       setError(result.error);
       return;
     }
-    toast.success(
-      signupRole === "PRO"
-        ? "Profile created. Awaiting admin approval to appear in search."
-        : "Profile created. You're verified.",
-    );
+    if (signupRole === "PRO") {
+      // Show the "Wait State" screen instead of routing to the dashboard immediately.
+      setSubmittedAsPro(true);
+      setProStep(4);
+      toast.success("Submitted for review. We'll notify you once an analyst approves your profile.");
+      return;
+    }
+    toast.success("Profile created. You're verified.");
     handleClose(false);
     onSuccess?.();
     navigate(routeForRole(result.user.role));
