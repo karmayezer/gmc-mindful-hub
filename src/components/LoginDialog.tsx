@@ -39,6 +39,10 @@ import {
   Building2,
   Briefcase,
   Sparkles,
+  FileCheck2,
+  Upload,
+  Hourglass,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
