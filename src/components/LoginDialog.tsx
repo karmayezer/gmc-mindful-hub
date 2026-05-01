@@ -98,6 +98,10 @@ export const LoginDialog = ({ open, onOpenChange, onSuccess }: LoginDialogProps)
   const [signupRole, setSignupRole] = useState<UserRole>("CUSTOMER");
   const [proCategory, setProCategory] = useState<CategoryId>("plumbing");
   const [error, setError] = useState<string | null>(null);
+  // 4-step Pro verification wizard (BRD §9.1). Only used when signupRole === "PRO".
+  const [proStep, setProStep] = useState<1 | 2 | 3 | 4>(1);
+  const [credentialFileName, setCredentialFileName] = useState<string | null>(null);
+  const [submittedAsPro, setSubmittedAsPro] = useState(false);
 
   // Staff flow state
   const [staffEmail, setStaffEmail] = useState("");
