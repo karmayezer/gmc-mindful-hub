@@ -101,7 +101,7 @@ interface AppContextValue extends AppState {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const STORAGE_KEY = "gmc-service-hub:v3";
+const STORAGE_KEY = "gmc-service-hub:v4";
 
 interface PersistedState {
   user: UserProfile | null;
